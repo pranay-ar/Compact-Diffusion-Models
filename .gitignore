@@ -1,0 +1,9 @@
+*.jpg
+*.png
+runs/
+*.pyc
+cifar10/
+models/
+slurm_jobs/
+*.tgz
+wandb/
