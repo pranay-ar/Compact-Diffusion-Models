@@ -52,7 +52,7 @@ class Diffusion:
                 else:
                     noise = torch.zeros_like(x)
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
-        model.train()
+        model.train() # why?
         x = (x.clamp(-1, 1) + 1) / 2
         x = (x * 255).type(torch.uint8)
         return x
@@ -90,6 +90,52 @@ def train(args):
         save_images(sampled_images, os.path.join("results", args.run_name, f"{epoch}.jpg"))
         torch.save(model.state_dict(), os.path.join("models", args.run_name, f"ckpt.pt"))
 
+def train_kd(args):
+    args.run_name += "_KD"
+    setup_logging(args.run_name)
+    device = args.device
+    dataloader = get_data(args)
+    
+    model = UNet(compress=2, device=device).to(device) # model of 1/4th size
+    model.train()
+    teacher = UNet(device=device).to(device)
+    teacher.load_state_dict(torch.load(args.teacher_path))
+    teacher.eval()
+    
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    mse = nn.MSELoss()
+    
+    diffusion = Diffusion(img_size=args.image_size, device=device)
+    logger = SummaryWriter(os.path.join("runs", args.run_name))
+    
+    l = len(dataloader)
+
+    for epoch in range(args.epochs):
+        logging.info(f"Starting epoch {epoch}:")
+        pbar = tqdm(dataloader)
+        for i, (images, _) in enumerate(pbar):
+            images = images.to(device)
+            t = diffusion.sample_timesteps(images.shape[0]).to(device)
+            x_t, noise = diffusion.noise_images(images, t)
+            
+            model_predicted_noise = model(x_t, t)
+            teacher_predicted_noise = teacher(x_t, t) # has to have same #steps
+            
+            loss_base = mse(noise, model_predicted_noise)
+            loss_teacher = mse(teacher_predicted_noise, model_predicted_noise)
+            loss = args.kd_frac * loss_teacher + (1-args.kd_frac) * loss_base
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            pbar.set_postfix(MSE=loss.item())
+            logger.add_scalar("MSE", loss.item(), global_step=epoch * l + i)
+
+        sampled_images = diffusion.sample(model, n=images.shape[0])
+        save_images(sampled_images, os.path.join("results", args.run_name, f"{epoch}.jpg"))
+        torch.save(model.state_dict(), os.path.join("models", args.run_name, f"ckpt.pt"))
+
 
 def launch():
     import argparse
@@ -102,7 +148,10 @@ def launch():
     args.dataset_path = r"/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/cifar10-64/train"
     args.device = "cuda"
     args.lr = 3e-4
+    # args.teacher_path = r"/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/models/DDPM_Uncondtional/ckpt.pt"
+    # args.kd_frac = 0.9 # maybe = 1 itself will be enough
     train(args)
+    # train_kd(args)
 
 
 if __name__ == '__main__':
