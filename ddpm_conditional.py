@@ -11,6 +11,7 @@ from modules import UNet_conditional, EMA
 import logging
 import wandb
 import yaml
+from torch.cuda.amp import GradScaler, autocast
 
 class Diffusion:
     def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cuda"):
@@ -64,7 +65,7 @@ class Diffusion:
 
 def train(configs):
 
-    wandb.init(project="CDM", config=configs, name="DDPM_conditional")
+    wandb.init(project="CDM", config=configs, name="DDPM_conditional") if configs.get("wandb", True) else wandb.init(mode="disabled")
 
     logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
     
@@ -77,6 +78,7 @@ def train(configs):
     num_classes = configs.get("num_classes", 10)
     image_size = configs.get("image_size", 64)
     run_name = configs.get("run_name")
+    model_dir, results_dir = setup_logging(run_name)
 
     setup_logging(run_name)
     dataloader = get_data(configs)
@@ -89,6 +91,10 @@ def train(configs):
     ema = EMA(0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
+    use_mixed_precision = configs.get("mixed_precision", False)
+    scaler = GradScaler() if use_mixed_precision else None
+    print(f"Using mixed precision: {use_mixed_precision}")
+
     for epoch in range(epochs):
         logging.info(f"Starting epoch {epoch}:")
         pbar = tqdm(dataloader)
@@ -96,15 +102,27 @@ def train(configs):
             images = images.to(device)
             labels = labels.to(device)
             t = diffusion.sample_timesteps(images.shape[0]).to(device)
-            x_t, noise = diffusion.noise_images(images, t)
-            if np.random.random() < 0.1:
-                labels = None
-            predicted_noise = model(x_t, t, labels)
-            loss = mse(noise, predicted_noise)
 
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+
+            if use_mixed_precision:
+                with autocast():
+                    x_t, noise = diffusion.noise_images(images, t)
+                    if np.random.random() < 0.1:
+                        labels = None
+                    predicted_noise = model(x_t, t, labels)
+                    loss = mse(noise, predicted_noise)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                x_t, noise = diffusion.noise_images(images, t)
+                if np.random.random() < 0.1:
+                    labels = None
+                predicted_noise = model(x_t, t, labels)
+                loss = mse(noise, predicted_noise)
+                loss.backward()
+                optimizer.step()
             ema.step_ema(ema_model, model)
 
             pbar.set_postfix(MSE=loss.item())
@@ -115,31 +133,20 @@ def train(configs):
             sampled_images = diffusion.sample(model, n=len(labels), labels=labels)
             ema_sampled_images = diffusion.sample(ema_model, n=len(labels), labels=labels)
             plot_images(sampled_images)
-            save_images(sampled_images, os.path.join("results",run_name, f"{epoch}.jpg"))
-            save_images(ema_sampled_images, os.path.join("results",run_name, f"{epoch}_ema.jpg"))
-            torch.save(model.module.state_dict(), os.path.join("models",run_name, f"ckpt.pt"))
-            torch.save(ema_model.state_dict(), os.path.join("models",run_name, f"ema_ckpt.pt"))
-            torch.save(optimizer.state_dict(), os.path.join("models",run_name, f"optim.pt"))
+            save_images(sampled_images, os.path.join(results_dir, f"{epoch}.jpg"))
+            save_images(ema_sampled_images, os.path.join(results_dir, f"{epoch}_ema.jpg"))
+            torch.save(model.module.state_dict(), os.path.join(model_dir, f"ckpt.pt"))
+            torch.save(ema_model.state_dict(), os.path.join(model_dir, f"ema_ckpt.pt"))
+            torch.save(optimizer.state_dict(), os.path.join(model_dir, f"optim.pt"))
 
 if __name__ == '__main__':
-    # device = "cuda"
-    # model = UNet_conditional(num_classes=10).to(device)
-    # ckpt = torch.load("./models/DDPM_conditional/ckpt.pt")
-    # ckpt = fix_state_dict(ckpt)
-    # model.load_state_dict(ckpt)
-    # diffusion = Diffusion(img_size=64, device=device)
-    # n = 8
-    # y = torch.Tensor([6] * n).long().to(device)
-    # x = diffusion.sample(model, n, y, cfg_scale=0)
-    # plot_images(x)
-
     parser = ArgumentParser()
     parser.add_argument(
-            "--config_path", default="./configs/default.yaml"
+            "--config", default="./configs/default.yaml"
         )
     args = parser.parse_args()
     
-    with open(args.config_path, "r") as f:
+    with open(args.config, "r") as f:
         configs = yaml.load(f, Loader=yaml.FullLoader)
     
     print(configs)
