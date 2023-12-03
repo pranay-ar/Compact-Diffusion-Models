@@ -4,10 +4,12 @@ import torchvision
 from PIL import Image
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
+from ddpm_conditional import Diffusion
+from pytorch_fid import fid_score
 
 
 def plot_images(images):
-    plt.figure(figsize=(32, 32))
+    plt.figure(figsize=(64, 64))
     plt.imshow(torch.cat([
         torch.cat([i for i in images.cpu()], dim=-1),
     ], dim=-2).permute(1, 2, 0).cpu())
@@ -15,10 +17,18 @@ def plot_images(images):
 
 
 def save_images(images, path, **kwargs):
-    grid = torchvision.utils.make_grid(images, **kwargs)
-    ndarr = grid.permute(1, 2, 0).to('cpu').numpy()
-    im = Image.fromarray(ndarr)
-    im.save(path)
+    # grid = torchvision.utils.make_grid(images, **kwargs)
+    # ndarr = grid.permute(1, 2, 0).to('cpu').numpy()
+    # im = Image.fromarray(ndarr)
+    # im.save(path)
+
+    #save all the images in a folder
+    for i, image in enumerate(images):
+        ndarr = image.permute(1, 2, 0).to('cpu').numpy()
+        im = Image.fromarray(ndarr)
+        im.save(os.path.join(path, f"{i}.jpg"))
+    
+    print("Images have been saved in the folder:", path)
 
 
 def get_data(configs):
@@ -40,6 +50,26 @@ def setup_logging(run_name):
     os.makedirs(results_dir, exist_ok=True)
     return model_dir, results_dir
 
-#to-do
-def compute_fid(original_images, generated_images, device):
-    pass
+def calculate_fid_for_epoch(model, epoch, results_dir, dataset_path, device):
+    diffusion = Diffusion(img_size=64, device=device)
+    generated_images_path = os.path.join(results_dir, f'generated_images_epochs_{epoch}')
+    os.makedirs(generated_images_path, exist_ok=True)
+    generated_images = diffusion.sample(model, n=64, labels=None)  # Adjust number of images
+    save_images(generated_images, generated_images_path)
+
+    # Choose between 'train' and 'test' folder based on your requirement
+    real_images_path = os.path.join(dataset_path, 'test/class0')  
+
+    fid = fid_score.calculate_fid_given_paths([real_images_path, generated_images_path],
+                                              batch_size=64,  # Adjust batch size to your hardware
+                                              device=device,
+                                              dims=2048)  # Inception features dimension
+    print(f'FID score at epoch {epoch}: {fid}')
+    return fid
+
+def fix_state_dict(state_dict):
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        name = k[7:] if k.startswith('module.') else k  # remove module. prefix if present
+        new_state_dict[name] = v
+    return new_state_dict

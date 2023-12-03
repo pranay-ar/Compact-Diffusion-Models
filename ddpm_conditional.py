@@ -128,7 +128,7 @@ def train(configs):
             pbar.set_postfix(MSE=loss.item())
             wandb.log({"MSE": loss.item(), "Epoch": epoch, "Batch": i})
 
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
             labels = torch.arange(10).long().to(device)
             sampled_images = diffusion.sample(model, n=len(labels), labels=labels)
             ema_sampled_images = diffusion.sample(ema_model, n=len(labels), labels=labels)
