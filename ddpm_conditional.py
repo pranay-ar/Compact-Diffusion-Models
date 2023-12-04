@@ -78,7 +78,8 @@ def train(configs):
     num_classes = configs.get("num_classes", 10)
     image_size = configs.get("image_size", 64)
     run_name = configs.get("run_name")
-    model_dir, results_dir = setup_logging(run_name) # will distillation reflect in path
+    model_dir, results_dir = setup_logging(run_name) 
+    # will distillation/compression reflect in path?
     
     use_distillation = configs.get("distillation", False)
     compressed_model = configs.get("compress", False)
@@ -123,7 +124,8 @@ def train(configs):
                         labels = None
                     predicted_noise = model(x_t, t, labels)
                     if use_distillation:
-                        loss = mse(teacher(x_t, t), predicted_noise) # can try weighted sum
+                        loss = mse(teacher(x_t, t), predicted_noise) 
+                        # can try weighted sum but probably no time/no need
                     else:
                         loss = mse(noise, predicted_noise)
                 scaler.scale(loss).backward()
