@@ -81,19 +81,19 @@ def train(configs):
     model_dir, results_dir = setup_logging(run_name) # will distillation reflect in path
     
     use_distillation = configs.get("distillation", False)
+    compressed_model = configs.get("compress", False)
 
     setup_logging(run_name)
     dataloader = get_data(configs)
+    
+    model = UNet_conditional(compress=2 if compressed_model else 1,
+                             num_classes=num_classes).to(device)
+    model = torch.nn.DataParallel(model)
     if use_distillation:
-        model = UNet_conditional(compress=2, num_classes=num_classes).to(device) # model of 1/4th size
         teacher = UNet_conditional(num_classes=num_classes).to(device)
-        model = torch.nn.DataParallel(model)
         teacher = torch.nn.DataParallel(teacher)
         teacher.load_state_dict(args.teacher_path)
         teacher.eval()
-    else:
-        model = UNet_conditional(num_classes=num_classes).to(device)
-        model = torch.nn.DataParallel(model)
     
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     mse = nn.MSELoss()

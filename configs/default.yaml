@@ -11,3 +11,4 @@ fid: "off"
 wandb: True
 mixed_precision: False
 distillation: False
+compress: False
