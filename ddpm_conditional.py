@@ -65,7 +65,7 @@ class Diffusion:
 
 def train(configs):
 
-    wandb.init(project="CDM", config=configs, name="DDPM_conditional") if configs.get("wandb", True) else wandb.init(mode="disabled")
+    wandb.init(project="CDM", config=configs, name=configs.get("run_name")) if configs.get("wandb", True) else wandb.init(mode="disabled")
 
     logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
     
@@ -92,9 +92,13 @@ def train(configs):
     model = torch.nn.DataParallel(model)
     if use_distillation:
         teacher = UNet_conditional(num_classes=num_classes).to(device)
+        teacher.load_state_dict(args.teacher_path if args.teach is not None else \
+            "/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/models/DDPM_conditional/ckpt.pt")
         teacher = torch.nn.DataParallel(teacher)
-        teacher.load_state_dict(args.teacher_path)
         teacher.eval()
+        for param in teacher.parameters():
+            param.requires_grad = False
+
     
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     mse = nn.MSELoss()
