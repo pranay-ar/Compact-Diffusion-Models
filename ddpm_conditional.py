@@ -136,7 +136,10 @@ def train(configs):
                 if np.random.random() < 0.1:
                     labels = None
                 predicted_noise = model(x_t, t, labels)
-                loss = mse(noise, predicted_noise)
+                if use_distillation:
+                    loss = mse(teacher(x_t, t), predicted_noise)
+                else:
+                    loss = mse(noise, predicted_noise)
                 loss.backward()
                 optimizer.step()
             ema.step_ema(ema_model, model)
