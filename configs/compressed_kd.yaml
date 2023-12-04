@@ -1,5 +1,5 @@
-run_name: "DDPM_conditional_comp_2"
-epochs: 300
+run_name: "DDPM_conditional"
+epochs: 1
 batch_size: 64
 image_size: 64
 num_classes: 10

@@ -79,7 +79,6 @@ def train(configs):
     image_size = configs.get("image_size", 64)
     run_name = configs.get("run_name")
     model_dir, results_dir = setup_logging(run_name) 
-    # will distillation/compression reflect in path?
     
     use_distillation = configs.get("distillation", False)
     compressed_model = configs.get("compress", False)
@@ -129,7 +128,6 @@ def train(configs):
                     predicted_noise = model(x_t, t, labels)
                     if use_distillation:
                         loss = mse(teacher(x_t, t), predicted_noise) 
-                        # can try weighted sum but probably no time/no need
                     else:
                         loss = mse(noise, predicted_noise)
                 scaler.scale(loss).backward()
@@ -168,12 +166,19 @@ if __name__ == '__main__':
             "--config", default="./configs/default.yaml"
         )
     parser.add_argument(
-            "--teacher_path", default=None # make it part of config/run_name?
+            "--teacher_path", default=None
         )
     args = parser.parse_args()
     
     with open(args.config, "r") as f:
         configs = yaml.load(f, Loader=yaml.FullLoader)
-    
+        
+    if configs.get("compress"):
+        configs["run_name"] += "_comp"
+    if configs.get("mixed_precision"):
+        configs["run_name"] += "_MPT"
+    if configs.get("distillation"):
+        configs["run_name"] += "_dist"
+
     print(configs)
     train(configs)

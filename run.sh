@@ -10,4 +10,4 @@
 source /home/pranayr_umass_edu/miniconda3/etc/profile.d/conda.sh
 conda activate imu2clip
 
-python ddpm_conditional.py
+python ddpm_conditional.py --config ./configs/compressed.yaml
