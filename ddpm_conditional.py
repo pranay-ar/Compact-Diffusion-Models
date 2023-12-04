@@ -78,12 +78,23 @@ def train(configs):
     num_classes = configs.get("num_classes", 10)
     image_size = configs.get("image_size", 64)
     run_name = configs.get("run_name")
-    model_dir, results_dir = setup_logging(run_name)
+    model_dir, results_dir = setup_logging(run_name) # will distillation reflect in path
+    
+    use_distillation = configs.get("distillation", False)
 
     setup_logging(run_name)
     dataloader = get_data(configs)
-    model = UNet_conditional(num_classes=num_classes).to(device)
-    model = torch.nn.DataParallel(model)
+    if use_distillation:
+        model = UNet_conditional(compress=2, num_classes=num_classes).to(device) # model of 1/4th size
+        teacher = UNet_conditional(num_classes=num_classes).to(device)
+        model = torch.nn.DataParallel(model)
+        teacher = torch.nn.DataParallel(teacher)
+        teacher.load_state_dict(args.teacher_path)
+        teacher.eval()
+    else:
+        model = UNet_conditional(num_classes=num_classes).to(device)
+        model = torch.nn.DataParallel(model)
+    
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=image_size, device=device)
@@ -111,7 +122,10 @@ def train(configs):
                     if np.random.random() < 0.1:
                         labels = None
                     predicted_noise = model(x_t, t, labels)
-                    loss = mse(noise, predicted_noise)
+                    if use_distillation:
+                        loss = mse(teacher(x_t, t), predicted_noise) # can try weighted sum
+                    else:
+                        loss = mse(noise, predicted_noise)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -143,6 +157,9 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument(
             "--config", default="./configs/default.yaml"
+        )
+    parser.add_argument(
+            "--teacher_path", default=None # make it part of config/run_name?
         )
     args = parser.parse_args()
     

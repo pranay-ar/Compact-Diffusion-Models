@@ -10,3 +10,4 @@ evaluation_interval: 10
 fid: "off"
 wandb: True
 mixed_precision: False
+distillation: False
