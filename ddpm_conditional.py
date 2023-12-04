@@ -38,29 +38,41 @@ class Diffusion:
     def sample_timesteps(self, n):
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
-    def sample(self, model, n, labels, cfg_scale=3):
-        logging.info(f"Sampling {n} new images....")
+    def sample(self, model, total_images, batch_size, labels, cfg_scale=3):
+        logging.info(f"Sampling {total_images} new images....")
+        model = nn.DataParallel(model)
+        model.to(self.device)
         model.eval()
+
+        generated_images = []
         with torch.no_grad():
-            x = torch.randn((n, 3, self.img_size, self.img_size)).to(self.device)
-            for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
-                t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t, labels)
-                if cfg_scale > 0:
-                    uncond_predicted_noise = model(x, t, None)
-                    predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
-                alpha = self.alpha[t][:, None, None, None]
-                alpha_hat = self.alpha_hat[t][:, None, None, None]
-                beta = self.beta[t][:, None, None, None]
-                if i > 1:
-                    noise = torch.randn_like(x)
-                else:
-                    noise = torch.zeros_like(x)
-                x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
+            for batch_idx in tqdm(range(0, total_images, batch_size), desc="Generating images"):
+                logging.info(f"Processing batch {batch_idx // batch_size + 1}...")
+                batch_n = min(batch_size, total_images - len(generated_images))
+                x = torch.randn((batch_n, 3, self.img_size, self.img_size)).to(self.device)
+
+                for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
+                    logging.info(f"Step {i} of noise_steps in batch {batch_idx // batch_size + 1}")
+                    t = (torch.ones(batch_n) * i).long().to(self.device)
+                    predicted_noise = model(x, t, labels)
+                    if cfg_scale > 0:
+                        uncond_predicted_noise = model(x, t, None)
+                        predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
+                    alpha = self.alpha[t][:, None, None, None]
+                    alpha_hat = self.alpha_hat[t][:, None, None, None]
+                    beta = self.beta[t][:, None, None, None]
+                    if i > 1:
+                        noise = torch.randn_like(x)
+                    else:
+                        noise = torch.zeros_like(x)
+                    x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / torch.sqrt(1 - alpha_hat)) * predicted_noise) + torch.sqrt(beta) * noise
+
+                x = (x.clamp(-1, 1) + 1) / 2
+                x = (x * 255).type(torch.uint8)
+                generated_images.extend(x.cpu())
+
         model.train()
-        x = (x.clamp(-1, 1) + 1) / 2
-        x = (x * 255).type(torch.uint8)
-        return x
+        return generated_images
 
 
 def train(configs):

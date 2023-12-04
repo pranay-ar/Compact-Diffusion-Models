@@ -233,7 +233,15 @@ class UNet_conditional(nn.Module):
         t = self.pos_encoding(t, self.time_dim)
 
         if y is not None:
-            t += self.label_emb(y)
+            # Ensure y has the correct batch size
+            if y.size(0) != x.size(0):
+                y = y[:x.size(0)]
+            label_embedding = self.label_emb(y)
+            # Ensure label embedding size matches t
+            if label_embedding.size(0) != t.size(0):
+                raise ValueError(f"Label embedding size {label_embedding.size(0)} does not match t size {t.size(0)}")
+
+            t += label_embedding
 
         x1 = self.inc(x)
         x2 = self.down1(x1, t)

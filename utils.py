@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from ddpm_conditional import Diffusion
 from pytorch_fid import fid_score
+import time
 
 
 def plot_images(images):
@@ -50,21 +51,28 @@ def setup_logging(run_name):
     os.makedirs(results_dir, exist_ok=True)
     return model_dir, results_dir
 
-def calculate_fid_for_epoch(model, epoch, results_dir, dataset_path, device):
-    diffusion = Diffusion(img_size=64, device=device)
-    generated_images_path = os.path.join(results_dir, f'generated_images_epochs_{epoch}')
-    os.makedirs(generated_images_path, exist_ok=True)
-    generated_images = diffusion.sample(model, n=64, labels=None)  # Adjust number of images
-    save_images(generated_images, generated_images_path)
+def calculate_fid(model, results_dir, dataset_path, device):
+    # diffusion = Diffusion(img_size=64, device=device)
+    # generated_images_path = os.path.join(results_dir, f'generated_image')
+    # os.makedirs(generated_images_path, exist_ok=True)
+    # start = time.time()
+    # generated_images = diffusion.sample(model, n=4096, labels=torch.Tensor([0]*4096).long().to(device))  # Adjust number of images
+    # save_images(generated_images, generated_images_path)
+    # end = time.time()
+    # print(f'Time taken to generate images: {end - start} seconds')
 
     # Choose between 'train' and 'test' folder based on your requirement
     real_images_path = os.path.join(dataset_path, 'test/class0')  
 
-    fid = fid_score.calculate_fid_given_paths([real_images_path, generated_images_path],
+    # time it
+    start = time.time()
+    fid = fid_score.calculate_fid_given_paths([real_images_path, results_dir],
                                               batch_size=64,  # Adjust batch size to your hardware
                                               device=device,
                                               dims=2048)  # Inception features dimension
-    print(f'FID score at epoch {epoch}: {fid}')
+    end = time.time()
+    print(f'Time taken: {end - start} seconds')
+    print(f'FID score: {fid}')
     return fid
 
 def fix_state_dict(state_dict):
