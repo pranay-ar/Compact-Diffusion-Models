@@ -8,6 +8,6 @@
 #SBATCH --mail-type=END
 
 source /home/pranayr_umass_edu/miniconda3/etc/profile.d/conda.sh
-conda activate imu2clip
+conda activate cdm
 
 python ddpm_conditional.py --config ./configs/compressed.yaml

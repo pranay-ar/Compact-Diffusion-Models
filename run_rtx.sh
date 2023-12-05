@@ -8,6 +8,6 @@
 #SBATCH --mail-type=END
 
 # source /home/pranayr_umass_edu/miniconda3/etc/profile.d/conda.sh
-# conda activate imu2clip
+# conda activate cmd
 
-python ddpm_conditional.py --config "/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/configs/rtx.yaml"
+python ddpm_conditional.py --config "./configs/rtx.yaml"
