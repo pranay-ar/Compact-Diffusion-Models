@@ -18,18 +18,18 @@ def plot_images(images):
 
 
 def save_images(images, path, **kwargs):
-    # grid = torchvision.utils.make_grid(images, **kwargs)
-    # ndarr = grid.permute(1, 2, 0).to('cpu').numpy()
-    # im = Image.fromarray(ndarr)
-    # im.save(path)
-
-    #save all the images in a folder
     for i, image in enumerate(images):
         ndarr = image.permute(1, 2, 0).to('cpu').numpy()
         im = Image.fromarray(ndarr)
         im.save(os.path.join(path, f"{i}.jpg"))
     
     print("Images have been saved in the folder:", path)
+
+def make_grid(images,path, **kwargs):
+    grid = torchvision.utils.make_grid(images, **kwargs)
+    ndarr = grid.permute(1, 2, 0).to('cpu').numpy()
+    im = Image.fromarray(ndarr)
+    im.save(path)
 
 
 def get_data(configs):
@@ -52,21 +52,9 @@ def setup_logging(run_name):
     return model_dir, results_dir
 
 def calculate_fid(model, results_dir, dataset_path, device):
-    # diffusion = Diffusion(img_size=64, device=device)
-    # generated_images_path = os.path.join(results_dir, f'generated_image')
-    # os.makedirs(generated_images_path, exist_ok=True)
-    # start = time.time()
-    # generated_images = diffusion.sample(model, n=4096, labels=torch.Tensor([0]*4096).long().to(device))  # Adjust number of images
-    # save_images(generated_images, generated_images_path)
-    # end = time.time()
-    # print(f'Time taken to generate images: {end - start} seconds')
-
-    # Choose between 'train' and 'test' folder based on your requirement
-    real_images_path = os.path.join(dataset_path, 'test/class0')  
-
     # time it
     start = time.time()
-    fid = fid_score.calculate_fid_given_paths([real_images_path, results_dir],
+    fid = fid_score.calculate_fid_given_paths([dataset_path, results_dir],
                                               batch_size=64,  # Adjust batch size to your hardware
                                               device=device,
                                               dims=2048)  # Inception features dimension
