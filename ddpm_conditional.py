@@ -131,7 +131,7 @@ def train(configs):
                         labels = None
                     predicted_noise = model(x_t, t, labels)
                     if use_distillation:
-                        loss = mse(teacher(x_t, t), predicted_noise) 
+                        loss = mse(teacher(x_t, t, labels), predicted_noise) 
                     else:
                         loss = mse(noise, predicted_noise)
                 scaler.scale(loss).backward()
@@ -143,7 +143,7 @@ def train(configs):
                     labels = None
                 predicted_noise = model(x_t, t, labels)
                 if use_distillation:
-                    loss = mse(teacher(x_t, t), predicted_noise)
+                    loss = mse(teacher(x_t, t, labels), predicted_noise)
                 else:
                     loss = mse(noise, predicted_noise)
                 loss.backward()
