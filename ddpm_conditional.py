@@ -91,7 +91,7 @@ def train(configs):
     model = torch.nn.DataParallel(model)
     if use_distillation:
         teacher = UNet_conditional(num_classes=num_classes).to(device)
-        teacher.load_state_dict(args.teacher_path if args.teach is not None else \
+        teacher.load_state_dict(args.teacher_path if args.teacher_path is not None else \
             "/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/models/DDPM_conditional/ema_ckpt.pt")
         teacher = torch.nn.DataParallel(teacher)
         teacher.eval()

@@ -9,6 +9,6 @@ learning_rate: 6.4e-4
 evaluation_interval: 10
 fid: "on"
 wandb: False
-mixed_precision: True
+mixed_precision: False
 distillation: True
 compress: True
