@@ -77,7 +77,7 @@ class Diffusion:
 
 def train(configs):
 
-    wandb.init(project="CDM", config=configs, name="DDPM_conditional") if configs.get("wandb", True) else wandb.init(mode="disabled")
+    wandb.init(project="CDM", config=configs, name=configs.get("run_name")) if configs.get("wandb", True) else wandb.init(mode="disabled")
 
     logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
     
@@ -90,12 +90,31 @@ def train(configs):
     num_classes = configs.get("num_classes", 10)
     image_size = configs.get("image_size", 64)
     run_name = configs.get("run_name")
-    model_dir, results_dir = setup_logging(run_name)
+    model_dir, results_dir = setup_logging(run_name) 
+    
+    use_distillation = configs.get("distillation", False)
+    compressed_model = configs.get("compress", False)
 
     setup_logging(run_name)
     dataloader = get_data(configs)
-    model = UNet_conditional(num_classes=num_classes).to(device)
+    
+    model = UNet_conditional(compress=2 if compressed_model else 1,
+                             num_classes=num_classes).to(device)
     model = torch.nn.DataParallel(model)
+    if use_distillation:
+        teacher = UNet_conditional(num_classes=num_classes).to(device)
+        ckpt = torch.load(
+            args.teacher_path if args.teacher_path is not None else \
+            "/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/models/DDPM_conditional/ema_ckpt.pt"
+            )
+        ckpt = fix_state_dict(ckpt)
+        teacher.load_state_dict(ckpt)
+        teacher = torch.nn.DataParallel(teacher)
+        teacher.eval()
+        for param in teacher.parameters():
+            param.requires_grad = False
+
+    
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=image_size, device=device)
@@ -123,7 +142,10 @@ def train(configs):
                     if np.random.random() < 0.1:
                         labels = None
                     predicted_noise = model(x_t, t, labels)
-                    loss = mse(noise, predicted_noise)
+                    if use_distillation:
+                        loss = mse(teacher(x_t, t, labels), predicted_noise) 
+                    else:
+                        loss = mse(noise, predicted_noise)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -132,7 +154,10 @@ def train(configs):
                 if np.random.random() < 0.1:
                     labels = None
                 predicted_noise = model(x_t, t, labels)
-                loss = mse(noise, predicted_noise)
+                if use_distillation:
+                    loss = mse(teacher(x_t, t, labels), predicted_noise)
+                else:
+                    loss = mse(noise, predicted_noise)
                 loss.backward()
                 optimizer.step()
             ema.step_ema(ema_model, model)
@@ -156,10 +181,20 @@ if __name__ == '__main__':
     parser.add_argument(
             "--config", default="./configs/default.yaml"
         )
+    parser.add_argument(
+            "--teacher_path", default=None
+        )
     args = parser.parse_args()
     
     with open(args.config, "r") as f:
         configs = yaml.load(f, Loader=yaml.FullLoader)
-    
+        
+    if configs.get("compress"):
+        configs["run_name"] += "_comp"
+    if configs.get("mixed_precision"):
+        configs["run_name"] += "_MPT"
+    if configs.get("distillation"):
+        configs["run_name"] += "_dist"
+
     print(configs)
     train(configs)
