@@ -150,7 +150,7 @@ class UNet(nn.Module):
         self.up2 = Up(c_0*4, c_0)
         self.sa5 = SelfAttention(c_0, 32)
         self.up3 = Up(c_0*2, c_0)
-        self.sa6 = SelfAttention(c_0, c_0)
+        self.sa6 = SelfAttention(c_0, 64)
         self.outc = nn.Conv2d(c_0, c_out, kernel_size=1)
 
     def pos_encoding(self, t, channels):
@@ -212,7 +212,7 @@ class UNet_conditional(nn.Module):
         self.up2 = Up(c_0*4, c_0)
         self.sa5 = SelfAttention(c_0, 32)
         self.up3 = Up(c_0*2, c_0)
-        self.sa6 = SelfAttention(c_0, c_0)
+        self.sa6 = SelfAttention(c_0, 64)
         self.outc = nn.Conv2d(c_0, c_out, kernel_size=1)
 
         if num_classes is not None:
