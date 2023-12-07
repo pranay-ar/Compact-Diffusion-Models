@@ -122,8 +122,12 @@ def train(configs):
     setup_logging(run_name)
     dataloader = get_data(configs)
     
-    model = UNet_conditional(compress=2 if compressed_model else 1,
-                             num_classes=num_classes).to(device)
+    model_path = configs.get("model_path", '')
+    if model_path:
+        model = torch.load(model_path)
+    else:
+        model = UNet_conditional(compress=2 if compressed_model else 1,
+                                num_classes=num_classes).to(device)
     model = torch.nn.DataParallel(model)
     if use_distillation:
         teacher = UNet_conditional(num_classes=num_classes).to(device)
@@ -196,7 +200,7 @@ def train(configs):
             else:
                 wandb.log({"MSE": loss.item(), "Epoch": epoch, "Batch": i})
 
-        if epoch % 50 == 0:
+        if epoch % 5 == 0:
             labels = torch.arange(10).long().to(device)
             sampled_images = diffusion.sample_train(model, n=len(labels), labels=labels)
             ema_sampled_images = diffusion.sample_train(ema_model, n=len(labels), labels=labels)

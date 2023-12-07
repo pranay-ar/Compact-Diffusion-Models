@@ -10,4 +10,16 @@
 # source /home/pranayr_umass_edu/miniconda3/etc/profile.d/conda.sh
 # conda activate cmd
 
-python ddpm_conditional.py --config "./configs/rtx.yaml"
+# python ddpm_conditional.py --config "./configs/rtx.yaml"
+# python ddpm_conditional.py --config "./configs/compressed_kd_MPT_RLT.yaml"
+python generate.py
+
+# python ddpm_prune.py \
+# --dataset ./data/cifar10-64/train/ \
+# --model_path ./models/DDPM_conditional/ema_ckpt.pt \
+# --save_path ./models/pruned/ddpm_conditional_pruned \
+# --pruning_ratio 0.16 \
+# --batch_size 32 \
+# --pruner diff-pruning \
+# --thr 0.05 \
+# --device cuda \

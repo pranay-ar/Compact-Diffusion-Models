@@ -11,3 +11,4 @@ source /home/pranayr_umass_edu/miniconda3/etc/profile.d/conda.sh
 conda activate cdm
 
 python generate.py
+# python ddpm_conditional.py --config "./configs/fine_tune.yaml"
