@@ -73,6 +73,30 @@ class Diffusion:
 
         model.train()
         return generated_images
+        
+    def sample_train(self, model, n, labels, cfg_scale=3):
+        logging.info(f"Sampling {n} new images....")
+        model.eval()
+        with torch.no_grad():
+            x = torch.randn((n, 3, self.img_size, self.img_size)).to(self.device)
+            for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
+                t = (torch.ones(n) * i).long().to(self.device)
+                predicted_noise = model(x, t, labels)
+                if cfg_scale > 0:
+                    uncond_predicted_noise = model(x, t, None)
+                    predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
+                alpha = self.alpha[t][:, None, None, None]
+                alpha_hat = self.alpha_hat[t][:, None, None, None]
+                beta = self.beta[t][:, None, None, None]
+                if i > 1:
+                    noise = torch.randn_like(x)
+                else:
+                    noise = torch.zeros_like(x)
+                x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
+        model.train()
+        x = (x.clamp(-1, 1) + 1) / 2
+        x = (x * 255).type(torch.uint8)
+        return x
 
 
 def train(configs):
@@ -142,10 +166,12 @@ def train(configs):
                     if np.random.random() < 0.1:
                         labels = None
                     predicted_noise = model(x_t, t, labels)
+                    loss_simple = mse(noise, predicted_noise)
                     if use_distillation:
-                        loss = mse(teacher(x_t, t, labels), predicted_noise) 
+                        loss_teacher = mse(teacher(x_t, t, labels), predicted_noise) 
+                        loss = (loss_teacher+loss_simple)/2
                     else:
-                        loss = mse(noise, predicted_noise)
+                        loss = loss_simple
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -154,27 +180,33 @@ def train(configs):
                 if np.random.random() < 0.1:
                     labels = None
                 predicted_noise = model(x_t, t, labels)
+                loss_simple = mse(noise, predicted_noise)
                 if use_distillation:
-                    loss = mse(teacher(x_t, t, labels), predicted_noise)
+                    loss_teacher = mse(teacher(x_t, t, labels), predicted_noise) 
+                    loss = (loss_teacher+loss_simple)/2
                 else:
-                    loss = mse(noise, predicted_noise)
+                    loss = loss_simple
                 loss.backward()
                 optimizer.step()
             ema.step_ema(ema_model, model)
 
             pbar.set_postfix(MSE=loss.item())
-            wandb.log({"MSE": loss.item(), "Epoch": epoch, "Batch": i})
+            if use_distillation:
+                wandb.log({"Loss": loss.item(), "MSE":loss_simple.item(), "Epoch": epoch, "Batch": i})
+            else:
+                wandb.log({"MSE": loss.item(), "Epoch": epoch, "Batch": i})
 
         if epoch % 50 == 0:
             labels = torch.arange(10).long().to(device)
-            sampled_images = diffusion.sample(model, n=len(labels), labels=labels)
-            ema_sampled_images = diffusion.sample(ema_model, n=len(labels), labels=labels)
+            sampled_images = diffusion.sample_train(model, n=len(labels), labels=labels)
+            ema_sampled_images = diffusion.sample_train(ema_model, n=len(labels), labels=labels)
             plot_images(sampled_images)
-            save_images(sampled_images, os.path.join(results_dir, f"{epoch}.jpg"))
-            save_images(ema_sampled_images, os.path.join(results_dir, f"{epoch}_ema.jpg"))
+            make_grid(sampled_images, os.path.join(results_dir, f"{epoch}.jpg"))
+            make_grid(ema_sampled_images, os.path.join(results_dir, f"{epoch}_ema.jpg"))
             torch.save(model.module.state_dict(), os.path.join(model_dir, f"ckpt.pt"))
             torch.save(ema_model.state_dict(), os.path.join(model_dir, f"ema_ckpt.pt"))
             torch.save(optimizer.state_dict(), os.path.join(model_dir, f"optim.pt"))
+            print("Saved model and optimizer states at epoch {}.".format(epoch))
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -188,13 +220,6 @@ if __name__ == '__main__':
     
     with open(args.config, "r") as f:
         configs = yaml.load(f, Loader=yaml.FullLoader)
-        
-    if configs.get("compress"):
-        configs["run_name"] += "_comp"
-    if configs.get("mixed_precision"):
-        configs["run_name"] += "_MPT"
-    if configs.get("distillation"):
-        configs["run_name"] += "_dist"
 
     print(configs)
     train(configs)

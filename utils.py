@@ -11,11 +11,11 @@ import time
 
 def plot_images(images):
     plt.figure(figsize=(64, 64))
+    tensor_images = [i.cpu() for i in images if torch.is_tensor(i)]
     plt.imshow(torch.cat([
-        torch.cat([i for i in images.cpu()], dim=-1),
+        torch.cat(tensor_images, dim=-1),
     ], dim=-2).permute(1, 2, 0).cpu())
     plt.show()
-
 
 def save_images(images, path, **kwargs):
     for i, image in enumerate(images):
@@ -51,7 +51,7 @@ def setup_logging(run_name):
     os.makedirs(results_dir, exist_ok=True)
     return model_dir, results_dir
 
-def calculate_fid(model, results_dir, dataset_path, device):
+def calculate_fid(results_dir, dataset_path, device):
     # time it
     start = time.time()
     fid = fid_score.calculate_fid_given_paths([dataset_path, results_dir],
@@ -69,3 +69,26 @@ def fix_state_dict(state_dict):
         name = k[7:] if k.startswith('module.') else k  # remove module. prefix if present
         new_state_dict[name] = v
     return new_state_dict
+
+
+def print_size_of_model(model):
+    torch.save(model.state_dict(), "temp.p")
+    #print upto 2 decimal points
+    print('Size:', os.path.getsize("temp.p")/1e6, 'MB')
+    os.remove('temp.p')
+
+def get_dataset(name_or_path, transform=None):
+
+    print(name_or_path)
+    if "cifar10-64" in name_or_path.lower():
+        if transform is None:
+            transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(80),  # configs.image_size + 1/4 *configs.image_size
+            torchvision.transforms.RandomResizedCrop(64, scale=(0.8, 1.0)),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ])
+        # print(name_or_path)
+        # print(transform)
+        dataset = torchvision.datasets.ImageFolder(name_or_path, transform=transform)
+        return dataset

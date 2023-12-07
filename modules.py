@@ -48,12 +48,13 @@ class SelfAttention(nn.Module):
         )
 
     def forward(self, x):
-        x = x.view(-1, self.channels, self.size * self.size).swapaxes(1, 2)
+        channels = x.shape[1]
+        x = x.view(-1, channels, self.size * self.size).swapaxes(1, 2)
         x_ln = self.ln(x)
         attention_value, _ = self.mha(x_ln, x_ln, x_ln)
         attention_value = attention_value + x
         attention_value = self.ff_self(attention_value) + attention_value
-        return attention_value.swapaxes(2, 1).view(-1, self.channels, self.size, self.size)
+        return attention_value.swapaxes(2, 1).view(-1, channels, self.size, self.size)
 
 
 class DoubleConv(nn.Module):
@@ -156,7 +157,7 @@ class UNet(nn.Module):
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
             10000
-            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+            ** (torch.arange(0, channels, 2, device=t.device).float() / channels)
         )
         pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
         pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
@@ -221,7 +222,7 @@ class UNet_conditional(nn.Module):
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
             10000
-            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+            ** (torch.arange(0, channels, 2, device=t.device).float() / channels)
         )
         pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
         pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
@@ -268,8 +269,8 @@ class UNet_conditional(nn.Module):
 if __name__ == '__main__':
     # net = UNet(device="cpu")
     net = UNet_conditional(num_classes=10, device="cpu")
-    # for name, param in net.named_parameters():
-    #     print(f"{name}: {param.size()}")
+    for name, param in net.named_parameters():
+        print(f"{name}: {param.size()}")
     print(sum([p.numel() for p in net.parameters()]))
     x = torch.randn(3, 3, 64, 64)
     t = x.new_tensor([500] * x.shape[0]).long()
