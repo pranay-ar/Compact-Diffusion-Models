@@ -8,7 +8,7 @@ from tqdm import tqdm
 import os
 from glob import glob
 from PIL import Image
-from utils import fix_state_dict, get_dataset
+from utils import fix_state_dict, get_data
 
 import numpy as np
 import torch.nn as nn
@@ -36,7 +36,7 @@ if __name__=='__main__':
     
     # loading images for gradient-based pruning
     if args.pruner in ['taylor', 'diff-pruning']:
-        dataset = get_dataset(args.dataset)
+        dataset = get_data(args.dataset)
         print(f"Dataset size: {len(dataset)}")
         train_dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.batch_size, shuffle=False, num_workers=1, drop_last=True

@@ -12,3 +12,13 @@ conda activate cdm
 
 python generate.py
 # python ddpm_conditional.py --config "./configs/fine_tune.yaml"
+
+# python ddpm_prune.py \
+# --dataset ./data/cifar10-64/train/ \
+# --model_path ./models/DDPM_conditional/ema_ckpt.pt \
+# --save_path ./models/pruned/ddpm_conditional_pruned \
+# --pruning_ratio 0.16 \
+# --batch_size 32 \
+# --pruner diff-pruning \
+# --thr 0.05 \
+# --device cuda \

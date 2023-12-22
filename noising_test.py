@@ -2,15 +2,19 @@ import torch
 from torchvision.utils import save_image
 from ddpm import Diffusion
 from utils import get_data
-import argparse
 
-parser = argparse.ArgumentParser()
-args = parser.parse_args()
-args.batch_size = 1  # 5
-args.image_size = 64
-args.dataset_path = r"/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/cifar10-64/test/"
 
-dataloader = get_data(args)
+batch_size = 1
+image_size = 64
+dataset_path = r"./data/cifar10/test/"
+configs = {
+    "batch_size": batch_size,
+    "image_size": image_size,
+    "dataset_path": dataset_path
+}
+
+
+dataloader = get_data(configs)
 
 diff = Diffusion(device="cpu")
 

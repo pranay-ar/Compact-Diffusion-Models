@@ -3,12 +3,12 @@ epochs: 300
 batch_size: 64
 image_size: 64
 num_classes: 10
-dataset_path: "data/cifar10-64/train"
+dataset_path: "data/sample"
 device: "cuda"
 learning_rate: 6.4e-4
 evaluation_interval: 10
 fid: "off"
-wandb: True
+wandb: False
 mixed_precision: False
 distillation: False
 compress: False

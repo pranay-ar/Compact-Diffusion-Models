@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from torch import optim
 from utils import *
 from argparse import ArgumentParser
 from modules import UNet_conditional, EMA
@@ -52,7 +51,6 @@ class Diffusion:
                 x = torch.randn((batch_n, 3, self.img_size, self.img_size)).to(self.device)
 
                 for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
-                    logging.info(f"Step {i} of noise_steps in batch {batch_idx // batch_size + 1}")
                     t = (torch.ones(batch_n) * i).long().to(self.device)
                     predicted_noise = model(x, t, labels)
                     if cfg_scale > 0:
@@ -73,31 +71,6 @@ class Diffusion:
 
         model.train()
         return generated_images
-        
-    def sample_train(self, model, n, labels, cfg_scale=3):
-        logging.info(f"Sampling {n} new images....")
-        model.eval()
-        with torch.no_grad():
-            x = torch.randn((n, 3, self.img_size, self.img_size)).to(self.device)
-            for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
-                t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t, labels)
-                if cfg_scale > 0:
-                    uncond_predicted_noise = model(x, t, None)
-                    predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
-                alpha = self.alpha[t][:, None, None, None]
-                alpha_hat = self.alpha_hat[t][:, None, None, None]
-                beta = self.beta[t][:, None, None, None]
-                if i > 1:
-                    noise = torch.randn_like(x)
-                else:
-                    noise = torch.zeros_like(x)
-                x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
-        model.train()
-        x = (x.clamp(-1, 1) + 1) / 2
-        x = (x * 255).type(torch.uint8)
-        return x
-
 
 def train(configs):
 
@@ -133,7 +106,7 @@ def train(configs):
         teacher = UNet_conditional(num_classes=num_classes).to(device)
         ckpt = torch.load(
             args.teacher_path if args.teacher_path is not None else \
-            "/work/pi_adrozdov_umass_edu/pranayr_umass_edu/cs682/Diffusion-Models-pytorch/models/DDPM_conditional/ema_ckpt.pt"
+            "./models/DDPM_conditional/ema_ckpt.pt"
             )
         ckpt = fix_state_dict(ckpt)
         teacher.load_state_dict(ckpt)
@@ -143,7 +116,7 @@ def train(configs):
             param.requires_grad = False
 
     
-    optimizer = optim.AdamW(model.parameters(), lr=lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=image_size, device=device)
     l = len(dataloader)
@@ -201,16 +174,20 @@ def train(configs):
                 wandb.log({"MSE": loss.item(), "Epoch": epoch, "Batch": i})
 
         if epoch % 5 == 0:
-            labels = torch.arange(10).long().to(device)
-            sampled_images = diffusion.sample_train(model, n=len(labels), labels=labels)
-            ema_sampled_images = diffusion.sample_train(ema_model, n=len(labels), labels=labels)
-            plot_images(sampled_images)
-            make_grid(sampled_images, os.path.join(results_dir, f"{epoch}.jpg"))
-            make_grid(ema_sampled_images, os.path.join(results_dir, f"{epoch}_ema.jpg"))
             torch.save(model.module.state_dict(), os.path.join(model_dir, f"ckpt.pt"))
             torch.save(ema_model.state_dict(), os.path.join(model_dir, f"ema_ckpt.pt"))
             torch.save(optimizer.state_dict(), os.path.join(model_dir, f"optim.pt"))
             print("Saved model and optimizer states at epoch {}.".format(epoch))
+
+            saved_model = UNet_conditional(compress=1, num_classes=10).to(device)
+            ckpt = torch.load(os.path.join(model_dir, f"ema_ckpt.pt"))  # load last checkpoint
+            ckpt = fix_state_dict(ckpt)
+            saved_model.load_state_dict(ckpt, strict=False)
+            diffusion = Diffusion(img_size=64, device=device)
+            labels = torch.arange(10).long().to(device)
+            ema_sampled_images = diffusion.sample(saved_model, total_images=len(labels), batch_size=10, labels=labels)
+            plot_images(ema_sampled_images)
+            make_grid(ema_sampled_images, os.path.join(results_dir, f"{epoch}_ema.jpg"))
 
 if __name__ == '__main__':
     parser = ArgumentParser()

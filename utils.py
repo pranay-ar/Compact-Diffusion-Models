@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from ddpm_conditional import Diffusion
 from pytorch_fid import fid_score
 import time
+import random
 
 
 def plot_images(images):
@@ -77,18 +78,32 @@ def print_size_of_model(model):
     print('Size:', os.path.getsize("temp.p")/1e6, 'MB')
     os.remove('temp.p')
 
-def get_dataset(name_or_path, transform=None):
+def create_row_collage(base_dir, class_folders, output_path):
+    images = []
+    # Load one random image from each class folder
+    for folder in class_folders:
+        class_dir = os.path.join(base_dir, folder)
+        files = [f for f in os.listdir(class_dir) if os.path.isfile(os.path.join(class_dir, f))]
+        if not files:
+            continue  # Skip folders with no images
+        selected_file = random.choice(files)
+        img_path = os.path.join(class_dir, selected_file)
+        images.append(Image.open(img_path))
 
-    print(name_or_path)
-    if "cifar10-64" in name_or_path.lower():
-        if transform is None:
-            transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(80),  # configs.image_size + 1/4 *configs.image_size
-            torchvision.transforms.RandomResizedCrop(64, scale=(0.8, 1.0)),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-            ])
-        # print(name_or_path)
-        # print(transform)
-        dataset = torchvision.datasets.ImageFolder(name_or_path, transform=transform)
-        return dataset
+    # Calculate total width and max height for the collage
+    total_width = sum(img.width for img in images)
+    max_height = max(img.height for img in images)
+
+    # Create a new blank image to paste the images into
+    collage = Image.new('RGB', (total_width, max_height))
+
+    # Paste images side by side
+    x_offset = 0
+    for img in images:
+        collage.paste(img, (x_offset, 0))
+        x_offset += img.width
+
+    # Save the collage
+    collage.save(output_path)
+
+    print("Collage saved to: ", output_path)
